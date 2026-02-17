@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Overlay Menu IG Feed</title>
+    <title>Left Menu IG Feed</title>
     <style>
         :root { --heart-pink: #F2B8D8; }
 
@@ -42,40 +42,43 @@
         .feed-frame:hover .heart-container { opacity: 1; }
         .heart-icon { font-size: 24px; color: var(--heart-pink); cursor: pointer; filter: drop-shadow(0 0 5px rgba(0,0,0,0.5)); }
 
-        /* OVERLAY MENU - This sits ABOVE the frame */
+        /* LEFT SIDE MENU OVERLAY */
         .menu-overlay {
-            position: absolute;
-            top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
+            position: fixed; /* Changed to fixed so it stays relative to screen, not frame */
+            top: 50%; 
+            left: 20px; /* Positioned on the left side of the screen */
+            transform: translateY(-50%) translateX(-150%); /* Start hidden off-screen */
             background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(5px);
+            backdrop-filter: blur(10px);
             border-radius: 15px;
             padding: 18px;
-            display: none;
+            display: flex;
             flex-direction: column;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-            width: 200px;
-            gap: 10px;
-            z-index: 999; /* Forces it to the top */
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            width: 180px;
+            gap: 8px;
+            z-index: 9999;
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
-        .menu-active .menu-overlay { display: flex; }
+        /* Show menu when active */
+        .menu-active .menu-overlay { transform: translateY(-50%) translateX(0); }
 
         .menu-overlay button { 
-            background: none; border: none; padding: 8px; 
+            background: none; border: none; padding: 10px; 
             text-align: left; cursor: pointer; font-size: 13px; 
-            color: #333; border-radius: 8px; transition: 0.2s;
+            color: #444; border-radius: 8px; transition: 0.2s;
         }
         .menu-overlay button:hover { background: #fdf0f6; color: var(--heart-pink); }
         
-        .reset-btn { color: #888 !important; font-style: italic; }
+        .reset-btn { color: #999 !important; font-size: 11px !important; margin-top: 5px; }
         
         .done-btn { 
-            margin-top: 5px; text-align: center !important; 
+            margin-top: 10px; text-align: center !important; 
             font-weight: bold; border-top: 1px solid #eee !important; 
-            padding-top: 12px !important; color: var(--heart-pink) !important;
+            padding-top: 15px !important; color: var(--heart-pink) !important;
         }
 
-        .zoom-label { font-size: 10px; font-weight: bold; color: var(--heart-pink); letter-spacing: 1px; }
+        .zoom-label { font-size: 10px; font-weight: bold; color: var(--heart-pink); letter-spacing: 1px; margin-top: 5px; }
         input[type=range] { width: 100%; accent-color: var(--heart-pink); cursor: pointer; }
 
         /* Nav Arrows */
@@ -115,7 +118,7 @@
                 <button onclick="setRatio('landscape')">Landscape (16:9)</button>
                 <button onclick="setRatio('square')">4 x 4 Ratio</button>
                 <button onclick="setRatio('portrait')">Original Frame</button>
-                <button onclick="resetImage()" class="reset-btn">↺ Reset Image</button>
+                <button onclick="resetImage()" class="reset-btn">↺ Reset Current Photo</button>
                 <hr style="border:0; border-top:1px solid #eee; width:100%">
                 <button onclick="toggleMove()" id="move-btn">Move Mode: OFF</button>
                 <div class="zoom-label">ZOOM LEVEL</div>
@@ -222,9 +225,24 @@
             const slider = document.getElementById('zoom-slider');
 
             dots[currentIndex].classList.remove('active');
-            currentIndex = (currentIndex + n + validImages.length) % validImages.length;
+
+            // NEW NAVIGATION LOGIC
+            let newIndex = currentIndex + n;
+            
+            // If we go past the last photo, jump back to 0
+            if (newIndex >= validImages.length) {
+                newIndex = 0;
+            } 
+            // If we go back past the first photo, jump to the last one
+            else if (newIndex < 0) {
+                newIndex = validImages.length - 1;
+            }
+
+            currentIndex = newIndex;
             wrapper.style.transform = `translateX(-${currentIndex * 100}%)`;
             dots[currentIndex].classList.add('active');
+            
+            // Sync zoom slider with current image zoom
             slider.value = positions[currentIndex].zoom;
         }
     </script>
