@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smooth Swipe IG Feed</title>
+    <style>
+        :root { --heart-pink: #F2B8D8; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            min-height: 100vh; margin: 0; background: transparent; user-select: none;
+        }
+
+        .feed-frame {
+            position: relative; width: 90vw; max-width: 400px;
+            background: #000; border-radius: 12px; overflow: hidden; touch-action: none;
+        }
+
+        /* Ratios */
+        .ratio-square { aspect-ratio: 1 / 1; }
+        .ratio-landscape { aspect-ratio: 16 / 9; }
+        .ratio-portrait { aspect-ratio: 4 / 5; }
+
+        /* Slider Container */
+        #slides-wrapper {
+            display: flex;
+            width: 100%; height: 100%;
+            transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1); /* The Swipe Animation */
+        }
+
+        .slide-container {
+            min-width: 100%; height: 100%;
+            overflow: hidden; position: relative;
+        }
+
+        .slide {
+            width: 100%; height: 100%; object-fit: cover;
+            transform-origin: center;
+            display: block;
+        }
+        
+        .draggable { cursor: move !important; }
+
+        /* Heart Menu */
+        .heart-container {
+            position: absolute; bottom: 15px; left: 15px;
+            z-index: 100; opacity: 0; transition: opacity 0.3s;
+        }
+        .feed-frame:hover .heart-container { opacity: 1; }
+        .heart-icon { font-size: 24px; color: var(--heart-pink); cursor: pointer; filter: drop-shadow(0 0 5px rgba(0,0,0,0.3)); }
+
+        .menu-popup {
+            position: absolute; bottom: 35px; left: 0;
+            background: white; border-radius: 10px;
+            padding: 12px; display: none; flex-direction: column;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2); min-width: 160px; gap: 8px;
+        }
+        .heart-container:hover .menu-popup { display: flex; }
+        .menu-popup button { background: none; border: none; padding: 6px; text-align: left; cursor: pointer; font-size: 13px; color: #333; border-radius: 5px; }
+        .menu-popup button:hover { background: #fdf0f6; color: var(--heart-pink); }
+        .zoom-label { font-size: 11px; font-weight: bold; color: var(--heart-pink); margin-top: 5px; }
+        input[type=range] { width: 100%; accent-color: var(--heart-pink); cursor: pointer; }
+
+        /* Nav */
+        .nav-arrow {
+            position: absolute; top: 50%; transform: translateY(-50%);
+            background: rgba(255, 255, 255, 0.3); border: none;
+            color: white; width: 32px; height: 32px; border-radius: 50%;
+            cursor: pointer; z-index: 10; opacity: 0; transition: 0.3s;
+        }
+        .feed-frame:hover .nav-arrow { opacity: 1; }
+        .prev { left: 10px; } .next { right: 10px; }
+        .dots { position: absolute; bottom: 10px; width: 100%; display: flex; justify-content: center; gap: 5px; }
+        .dot { width: 5px; height: 5px; background: rgba(255,255,255,0.4); border-radius: 50%; transition: 0.3s; }
+        .dot.active { background: white; width: 7px; height: 7px; }
+    </style>
+</head>
+<body>
+
+    <script>
+        const CONFIG = {
+            defaultStyle: 'portrait', 
+            pages: [
+                "https://i.pinimg.com/736x/7d/84/2c/7d842cd7f984c7b87c32da2c2ff4db45.jpg",
+                "https://i.pinimg.com/736x/74/6d/61/746d619f1612eef6516fc4bb14bc4452.jpg",
+                "https://i.pinimg.com/736x/f4/ee/0c/f4ee0c9df9b42e99e71e3fae76fb0fdd.jpg",
+                "", "", "", "", "", "", ""
+            ]
+        };
+    </script>
+
+    <div id="feed-container" class="feed-frame">
+        <div id="slides-wrapper"></div>
+
+        <div class="heart-container">
+            <div class="heart-icon">♥</div>
+            <div class="menu-popup">
+                <button onclick="setRatio('landscape')">Landscape</button>
+                <button onclick="setRatio('square')">4 x 4 Ratio</button>
+                <button onclick="setRatio('portrait')">Original Frame</button>
+                <hr style="border:0; border-top:1px solid #eee; width:100%">
+                <button onclick="toggleMove()" id="move-btn">Move Mode: OFF</button>
+                <div class="zoom-label">ZOOM LEVEL</div>
+                <input type="range" id="zoom-slider" min="1" max="3" step="0.1" value="1" oninput="updateZoom(this.value)">
+            </div>
+        </div>
+
+        <button class="nav-arrow prev" onclick="changeSlide(-1)">❮</button>
+        <button class="nav-arrow next" onclick="changeSlide(1)">❯</button>
+        <div id="dots-container" class="dots"></div>
+    </div>
+
+    <script>
+        let currentIndex = 0;
+        let validImages = [];
+        let canDrag = false;
+        let positions = [];
+
+        window.onload = () => {
+            const frame = document.getElementById('feed-container');
+            const wrapper = document.getElementById('slides-wrapper');
+            const dotsContainer = document.getElementById('dots-container');
+
+            frame.classList.add(`ratio-${CONFIG.defaultStyle}`);
+            validImages = CONFIG.pages.filter(url => url.trim() !== "");
+
+            validImages.forEach((url, idx) => {
+                positions.push({ x: 50, y: 50, zoom: 1 });
+
+                const container = document.createElement('div');
+                container.className = 'slide-container';
+
+                const img = document.createElement('img');
+                img.src = url;
+                img.className = 'slide';
+                img.draggable = false;
+                
+                // Dragging Logic
+                let isMoving = false;
+                let startX, startY;
+
+                const start = (e) => { if(!canDrag) return; isMoving = true; startX = (e.pageX || e.touches[0].pageX); startY = (e.pageY || e.touches[0].pageY); };
+                const move = (e) => {
+                    if(!isMoving || !canDrag) return;
+                    const x = (e.pageX || e.touches[0].pageX);
+                    const y = (e.pageY || e.touches[0].pageY);
+                    positions[idx].x += (startX - x) / 5;
+                    positions[idx].y += (startY - y) / 5;
+                    positions[idx].x = Math.max(0, Math.min(100, positions[idx].x));
+                    positions[idx].y = Math.max(0, Math.min(100, positions[idx].y));
+                    img.style.objectPosition = `${positions[idx].x}% ${positions[idx].y}%`;
+                    startX = x; startY = y;
+                };
+                const end = () => isMoving = false;
+
+                img.onmousedown = start; img.ontouchstart = start;
+                window.addEventListener('mousemove', move); window.addEventListener('touchmove', move);
+                window.addEventListener('mouseup', end); window.addEventListener('touchend', end);
+
+                container.appendChild(img);
+                wrapper.appendChild(container);
+
+                let d = document.createElement('div');
+                d.className = `dot ${idx === 0 ? 'active' : ''}`;
+                dotsContainer.appendChild(d);
+            });
+        };
+
+        function setRatio(type) { document.getElementById('feed-container').className = `feed-frame ratio-${type}`; }
+
+        function toggleMove() {
+            canDrag = !canDrag;
+            document.getElementById('move-btn').innerText = `Move Mode: ${canDrag ? 'ON' : 'OFF'}`;
+            document.querySelectorAll('.slide').forEach(s => s.classList.toggle('draggable', canDrag));
+        }
+
+        function updateZoom(val) {
+            positions[currentIndex].zoom = val;
+            const slides = document.querySelectorAll('.slide');
+            slides[currentIndex].style.transform = `scale(${val})`;
+        }
+
+        function changeSlide(n) {
+            const wrapper = document.getElementById('slides-wrapper');
+            const dots = document.querySelectorAll('.dot');
+            const slider = document.getElementById('zoom-slider');
+
+            dots[currentIndex].classList.remove('active');
+            currentIndex = (currentIndex + n + validImages.length) % validImages.length;
+            
+            // Perform the Slide Animation
+            wrapper.style.transform = `translateX(-${currentIndex * 100}%)`;
+            
+            dots[currentIndex].classList.add('active');
+            slider.value = positions[currentIndex].zoom;
+        }
+    </script>
+</body>
+</html>
