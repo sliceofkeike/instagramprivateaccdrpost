@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sticky Menu IG Feed</title>
+    <title>Overlay Menu IG Feed</title>
     <style>
         :root { --heart-pink: #F2B8D8; }
 
@@ -16,6 +16,7 @@
         .feed-frame {
             position: relative; width: 90vw; max-width: 400px;
             background: #000; border-radius: 12px; overflow: hidden; touch-action: none;
+            z-index: 1;
         }
 
         /* Ratios */
@@ -30,56 +31,69 @@
         }
 
         .slide-container { min-width: 100%; height: 100%; overflow: hidden; position: relative; }
-        .slide { width: 100%; height: 100%; object-fit: cover; transform-origin: center; display: block; }
+        .slide { width: 100%; height: 100%; object-fit: cover; transform-origin: center; display: block; transition: transform 0.2s ease-out; }
         .draggable { cursor: move !important; }
 
-        /* Heart Menu - Click Based */
+        /* Heart Icon */
         .heart-container {
             position: absolute; bottom: 15px; left: 15px;
-            z-index: 100; opacity: 0; transition: opacity 0.3s;
+            z-index: 10; opacity: 0; transition: opacity 0.3s;
         }
         .feed-frame:hover .heart-container { opacity: 1; }
-        .heart-icon { font-size: 24px; color: var(--heart-pink); cursor: pointer; filter: drop-shadow(0 0 5px rgba(0,0,0,0.3)); }
+        .heart-icon { font-size: 24px; color: var(--heart-pink); cursor: pointer; filter: drop-shadow(0 0 5px rgba(0,0,0,0.5)); }
 
-        .menu-popup {
-            position: absolute; bottom: 35px; left: 0;
-            background: white; border-radius: 10px;
-            padding: 12px; display: none; flex-direction: column;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2); min-width: 160px; gap: 8px;
+        /* OVERLAY MENU - This sits ABOVE the frame */
+        .menu-overlay {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(5px);
+            border-radius: 15px;
+            padding: 18px;
+            display: none;
+            flex-direction: column;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            width: 200px;
+            gap: 10px;
+            z-index: 999; /* Forces it to the top */
         }
-        /* Class to show menu when heart is clicked */
-        .menu-active .menu-popup { display: flex; }
+        .menu-active .menu-overlay { display: flex; }
 
-        .menu-popup button { background: none; border: none; padding: 6px; text-align: left; cursor: pointer; font-size: 13px; color: #333; border-radius: 5px; }
-        .menu-popup button:hover { background: #fdf0f6; color: var(--heart-pink); }
+        .menu-overlay button { 
+            background: none; border: none; padding: 8px; 
+            text-align: left; cursor: pointer; font-size: 13px; 
+            color: #333; border-radius: 8px; transition: 0.2s;
+        }
+        .menu-overlay button:hover { background: #fdf0f6; color: var(--heart-pink); }
+        
+        .reset-btn { color: #888 !important; font-style: italic; }
         
         .done-btn { 
-            margin-top: 5px; 
-            text-align: center !important; 
-            font-weight: bold; 
-            border-top: 1px solid #eee !important; 
-            padding-top: 10px !important;
-            color: var(--heart-pink) !important;
+            margin-top: 5px; text-align: center !important; 
+            font-weight: bold; border-top: 1px solid #eee !important; 
+            padding-top: 12px !important; color: var(--heart-pink) !important;
         }
 
-        .zoom-label { font-size: 11px; font-weight: bold; color: var(--heart-pink); margin-top: 5px; }
+        .zoom-label { font-size: 10px; font-weight: bold; color: var(--heart-pink); letter-spacing: 1px; }
         input[type=range] { width: 100%; accent-color: var(--heart-pink); cursor: pointer; }
 
-        /* Nav */
+        /* Nav Arrows */
         .nav-arrow {
             position: absolute; top: 50%; transform: translateY(-50%);
-            background: rgba(255, 255, 255, 0.3); border: none;
+            background: rgba(255, 255, 255, 0.2); border: none;
             color: white; width: 32px; height: 32px; border-radius: 50%;
-            cursor: pointer; z-index: 10; opacity: 0; transition: 0.3s;
+            cursor: pointer; z-index: 5; opacity: 0; transition: 0.3s;
         }
         .feed-frame:hover .nav-arrow { opacity: 1; }
         .prev { left: 10px; } .next { right: 10px; }
-        .dots { position: absolute; bottom: 10px; width: 100%; display: flex; justify-content: center; gap: 5px; }
+        
+        .dots { position: absolute; bottom: 10px; width: 100%; display: flex; justify-content: center; gap: 5px; z-index: 5; }
         .dot { width: 5px; height: 5px; background: rgba(255,255,255,0.4); border-radius: 50%; transition: 0.3s; }
         .dot.active { background: white; width: 7px; height: 7px; }
     </style>
 </head>
-<body>
+<body id="main-body">
 
     <script>
         const CONFIG = {
@@ -96,17 +110,21 @@
     <div id="feed-container" class="feed-frame">
         <div id="slides-wrapper"></div>
 
-        <div class="heart-container" id="heart-wrap">
-            <div class="heart-icon" onclick="toggleMenu()">♥</div>
-            <div class="menu-popup">
-                <button onclick="setRatio('landscape')">Landscape</button>
+        <div id="ui-layer">
+            <div class="menu-overlay">
+                <button onclick="setRatio('landscape')">Landscape (16:9)</button>
                 <button onclick="setRatio('square')">4 x 4 Ratio</button>
                 <button onclick="setRatio('portrait')">Original Frame</button>
+                <button onclick="resetImage()" class="reset-btn">↺ Reset Image</button>
                 <hr style="border:0; border-top:1px solid #eee; width:100%">
                 <button onclick="toggleMove()" id="move-btn">Move Mode: OFF</button>
                 <div class="zoom-label">ZOOM LEVEL</div>
                 <input type="range" id="zoom-slider" min="1" max="3" step="0.1" value="1" oninput="updateZoom(this.value)">
                 <button class="done-btn" onclick="toggleMenu()">Done</button>
+            </div>
+
+            <div class="heart-container" id="heart-wrap">
+                <div class="heart-icon" onclick="toggleMenu()">♥</div>
             </div>
         </div>
 
@@ -171,11 +189,19 @@
         };
 
         function toggleMenu() {
-            document.getElementById('heart-wrap').classList.toggle('menu-active');
+            document.getElementById('main-body').classList.toggle('menu-active');
         }
 
         function setRatio(type) { 
             document.getElementById('feed-container').className = `feed-frame ratio-${type}`; 
+        }
+
+        function resetImage() {
+            const slides = document.querySelectorAll('.slide');
+            positions[currentIndex] = { x: 50, y: 50, zoom: 1 };
+            slides[currentIndex].style.transform = `scale(1)`;
+            slides[currentIndex].style.objectPosition = `50% 50%`;
+            document.getElementById('zoom-slider').value = 1;
         }
 
         function toggleMove() {
